@@ -17,6 +17,8 @@
   },
   "homepage": "https://github.com/supercarteiralab/cei-extractor#readme",
   "dependencies": {
+    "express": "^4.17.1",
+    "node-cache": "^4.2.1",
     "puppeteer": "^1.20.0"
   }
 }

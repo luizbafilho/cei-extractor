@@ -8,10 +8,10 @@ const HEAD_TABLE_SELECTOR =
 const BODY_TABLE_SELECTOR =
   "#ctl00_ContentPlaceHolder1_rptAgenteBolsa_ctl00_rptContaBolsa_ctl00_pnAtivosNegociados > div > div > section > div > table > tbody > tr";
 
-const extractionData = {};
+const extractTransactions = async (username, password) => {
+  let extractionData = [];
 
-(async () => {
-  const browser = await puppeteer.launch({ headless: false });
+  const browser = await puppeteer.launch();
   const page = await browser.newPage();
 
   // for log and better network/loading performance
@@ -31,9 +31,9 @@ const extractionData = {};
   // do auth
   await page.goto("https://cei.b3.com.br/CEI_Responsivo/");
   await page.click("#ctl00_ContentPlaceHolder1_txtLogin");
-  await page.keyboard.type("03566725307");
+  await page.keyboard.type(username);
   await page.click("#ctl00_ContentPlaceHolder1_txtSenha");
-  await page.keyboard.type("9Afd8P@P9xKt");
+  await page.keyboard.type(password);
   await page.click("#ctl00_ContentPlaceHolder1_btnLogar");
   await page.waitForSelector("#ctl00_Breadcrumbs_lblTituloPagina");
 
@@ -44,20 +44,22 @@ const extractionData = {};
   await page.waitForSelector(BROKER_SELECTOR);
 
   // extract brokers ids
-  const brokers = await page.evaluate(selector => {
+  let brokers = await page.evaluate(selector => {
     return Array.prototype.map.call(
       document.querySelector(selector).children,
       el => ({ id: el.value, name: el.textContent.trim() })
     );
   }, BROKER_SELECTOR);
 
+  brokers = brokers.filter(value => {
+    return (
+      value["name"].includes("1026") || value["name"].includes("Selecione")
+    );
+  });
+
   // extract information of each broker with one single account
   for (let index = 1; index < brokers.length; index++) {
     const brokerId = brokers[index].id;
-    extractionData[brokerId] = {
-      name: brokers[index].name,
-      data: []
-    };
 
     await page.select(BROKER_SELECTOR, brokerId);
     await page.waitForResponse(
@@ -69,7 +71,7 @@ const extractionData = {};
     );
 
     try {
-      await page.waitFor(BODY_TABLE_SELECTOR, { timeout: 10 * 1000 });
+      await page.waitFor(BODY_TABLE_SELECTOR, { timeout: 30 * 1000 });
     } catch (error) {}
 
     if (index == 1) {
@@ -91,11 +93,8 @@ const extractionData = {};
     }, BODY_TABLE_SELECTOR);
 
     rows.forEach(row => {
-      var dataRow = {};
-      row.forEach((col, index) => {
-        dataRow[header[index]] = col;
-      });
-      extractionData[brokerId].data.push(dataRow);
+      row.push(brokers[index].name);
+      extractionData.push(row);
     });
 
     await page.click(SEARCH_BTN_SELECTOR);
@@ -104,8 +103,9 @@ const extractionData = {};
     );
   }
 
-  await page.screenshot({ path: "example.png" });
-
-  console.log(extractionData);
   await browser.close();
-})();
+
+  return extractionData;
+};
+
+module.exports.extractTransactions = extractTransactions;
