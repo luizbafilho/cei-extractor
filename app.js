@@ -3,7 +3,7 @@ const NodeCache = require("node-cache");
 const extractor = require("./extractor");
 
 const app = express();
-const cache = new NodeCache({ stdTTL: 10, checkperiod: 5 });
+const cache = new NodeCache({ stdTTL: 12 * 60 * 60, checkperiod: 5 });
 
 app.get("/", async (req, res, next) => {
   username = req.query.username;
@@ -18,20 +18,33 @@ app.get("/", async (req, res, next) => {
     return;
   }
 
-  transactions = cache.get(username);
+  filter = req.query.filter;
+
+  let cache_key = username + filter;
+  transactions = cache.get(cache_key);
   if (transactions == undefined) {
     console.log("cache miss: fetching data from CEI...");
     try {
-      transactions = await extractor.extractTransactions(username, password);
-      cache.set(username, transactions);
+      transactions = await extractor.extractTransactions(
+        username,
+        password,
+        filter
+      );
+      cache.set(cache_key, transactions);
     } catch (e) {
+      console.log("error fetching transactions", e);
       next(e);
+      return;
     }
   }
 
   const csv = transactions
     .map(transaction => {
-      return transaction.join(",");
+      return transaction
+        .map(elem => {
+          return `\"${elem}\"`;
+        })
+        .join(",");
     })
     .join("\n");
 
